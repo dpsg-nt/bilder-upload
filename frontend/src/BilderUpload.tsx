@@ -21,19 +21,6 @@ import { useLocalStorage } from "./utils/useLocalStorage";
 import { generateYears } from "./utils/generateYears";
 
 const useStyles = makeStyles((theme) => ({
-  successAlert: {
-    marginBottom: theme.spacing(1),
-  },
-  progressBar: {
-    marginBottom: theme.spacing(1),
-  },
-  nameInput: {
-    marginTop: theme.spacing(1),
-    marginBottom: theme.spacing(1),
-  },
-  aktionInput: {
-    marginBottom: theme.spacing(1),
-  },
   circularProgress: {
     float: "left",
     marginTop: "5px",
@@ -46,6 +33,7 @@ const useStyles = makeStyles((theme) => ({
 
 type UploadNotStarted = { type: "UploadNotStarted" };
 type UploadComplete = { type: "UploadComplete" };
+type UploadFailed = { type: "UploadFailed" };
 type UploadRunning = {
   type: "UploadRunning";
   progress: number;
@@ -70,7 +58,9 @@ export const BilderUpload: React.FC = () => {
   });
 
   const [fileList, setFileList] = React.useState<File[]>([]);
-  const [uploadState, setUploadState] = React.useState<UploadNotStarted | UploadRunning | UploadComplete>({
+  const [uploadState, setUploadState] = React.useState<
+    UploadNotStarted | UploadRunning | UploadComplete | UploadFailed
+  >({
     type: "UploadNotStarted",
   });
 
@@ -85,24 +75,28 @@ export const BilderUpload: React.FC = () => {
   };
 
   const startUpload = async (state: FormState) => {
-    console.log("ok");
-    setPersistentName(state.name);
-    setUploadState({ type: "UploadRunning", progress: 0 });
+    try {
+      setPersistentName(state.name);
+      setUploadState({ type: "UploadRunning", progress: 0 });
 
-    for (let index = 0; index < fileList.length; index++) {
-      setUploadState({ type: "UploadRunning", progress: index });
-      const file = fileList[index];
-      const uploadTicket = await axios.post(`${apiBaseUrl}/upload`, {
-        name: `${state.jahr} ${state.aktion} (${state.name})`,
-        file: file.name,
-      });
-      const uploadUrl = uploadTicket.data.uploadUrl;
+      for (let index = 0; index < fileList.length; index++) {
+        setUploadState({ type: "UploadRunning", progress: index });
+        const file = fileList[index];
+        const uploadTicket = await axios.post(`${apiBaseUrl}/upload`, {
+          name: `${state.jahr} ${state.aktion} (${state.name})`,
+          file: file.name,
+        });
+        const uploadUrl = uploadTicket.data.uploadUrl;
 
-      await axios.put(uploadUrl, await file.arrayBuffer(), {
-        headers: { "Content-Range": `bytes 0-${file.size - 1}/${file.size}` },
-      });
+        await axios.put(uploadUrl, await file.arrayBuffer(), {
+          headers: { "Content-Range": `bytes 0-${file.size - 1}/${file.size}` },
+        });
+      }
+      setUploadState({ type: "UploadComplete" });
+    } catch (e) {
+      setUploadState({ type: "UploadFailed" });
+      throw e;
     }
-    setUploadState({ type: "UploadComplete" });
   };
 
   return (
@@ -115,99 +109,103 @@ export const BilderUpload: React.FC = () => {
         ref={inputRef}
         style={{ display: "none" }}
       />
-      <Grid item xs={12}>
+      <Grid container spacing={2}>
         {uploadState.type === "UploadNotStarted" && (
           <>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <Typography paragraph>Wir freuen uns sehr, dass du deine Bilder mit uns teilen willst.</Typography>
-                <Alert severity="info">
-                  Wenn du Bilder von mehreren Aktionen hast, dann lade sie bitte getrennt hoch.
-                </Alert>
-              </Grid>
+            <Grid item xs={12}>
+              <Typography paragraph>Wir freuen uns sehr, dass du deine Bilder mit uns teilen willst.</Typography>
+              <Alert severity="info">
+                Wenn du Bilder von mehreren Aktionen hast, dann lade sie bitte getrennt hoch.
+              </Alert>
+            </Grid>
 
-              <Grid item xs={12}>
-                <TextField
-                  label="Dein Name"
-                  helperText="Damit wir wissen von wem die Bilder sind"
-                  error={!!errors.name}
-                  fullWidth
-                  {...register("name", { required: true })}
-                />
-              </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Dein Name"
+                helperText="Damit wir wissen von wem die Bilder sind"
+                error={!!errors.name}
+                fullWidth
+                {...register("name", { required: true })}
+              />
+            </Grid>
 
-              <Grid item xs={12}>
-                <FormControl style={{ width: "100%" }} error={!!errors.jahr}>
-                  <InputLabel shrink id="demo-simple-select-placeholder-label-label">
-                    Jahr
-                  </InputLabel>
-                  <Select
-                    value={getValues("jahr")}
-                    onChange={(e) => setValue("jahr", parseInt(e.target.value as string))}
-                  >
-                    {generateYears().map((year) => (
-                      <MenuItem value={year} key={year}>
-                        {year}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>Das Jahr in dem die Bilder aufgenommen wurden</FormHelperText>
-                </FormControl>
-              </Grid>
+            <Grid item xs={12}>
+              <FormControl style={{ width: "100%" }} error={!!errors.jahr}>
+                <InputLabel shrink id="demo-simple-select-placeholder-label-label">
+                  Jahr
+                </InputLabel>
+                <Select
+                  value={getValues("jahr")}
+                  onChange={(e) => setValue("jahr", parseInt(e.target.value as string))}
+                >
+                  {generateYears().map((year) => (
+                    <MenuItem value={year} key={year}>
+                      {year}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>Das Jahr in dem die Bilder aufgenommen wurden</FormHelperText>
+              </FormControl>
+            </Grid>
 
-              <Grid item xs={12}>
-                <TextField
-                  label="Name der Aktion"
-                  helperText="Name der Aktion von der die Bilder stammen"
-                  fullWidth
-                  error={!!errors.aktion}
-                  {...register("aktion", { required: true })}
-                />
-              </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Name der Aktion"
+                helperText="Name der Aktion von der die Bilder stammen"
+                fullWidth
+                error={!!errors.aktion}
+                {...register("aktion", { required: true })}
+              />
+            </Grid>
 
-              <Grid item xs={12}>
-                <Typography paragraph>
-                  <Button variant="contained" color="secondary" onClick={() => inputRef.current?.click()}>
-                    {fileList.length > 0 ? `✓ ${fileList.length} Bilder ausgewählt` : "Bilder auswählen"}
+            <Grid item xs={12}>
+              <Typography paragraph>
+                <Button variant="contained" color="secondary" onClick={() => inputRef.current?.click()}>
+                  {fileList.length > 0 ? `✓ ${fileList.length} Bilder ausgewählt` : "Bilder auswählen"}
+                </Button>
+              </Typography>
+              {fileList.length > 0 && (
+                <>
+                  <Typography paragraph>Klicke "Upload starten" um deine Bilder hochzuladen.</Typography>
+                  <Button variant="contained" color="secondary" onClick={handleSubmit(startUpload)}>
+                    Upload starten
                   </Button>
-                </Typography>
-                {fileList.length > 0 && (
-                  <>
-                    <Typography paragraph>Klicke "Upload starten" um deine Bilder hochzuladen.</Typography>
-                    <Button variant="contained" color="secondary" onClick={handleSubmit(startUpload)}>
-                      Upload starten
-                    </Button>
-                  </>
-                )}
-              </Grid>
+                </>
+              )}
             </Grid>
           </>
         )}
 
         {uploadState.type === "UploadRunning" && (
-          <>
+          <Grid item xs={12}>
             <Typography paragraph>Deine Bilder werden jetzt hochgeladen, dies kann einige Zeit dauern.</Typography>
-            <LinearProgress
-              variant="determinate"
-              value={(uploadState.progress / fileList.length) * 100}
-              className={classes.progressBar}
-            />
+            <LinearProgress variant="determinate" value={(uploadState.progress / fileList.length) * 100} />
             <CircularProgress size="16px" className={classes.circularProgress} />
             <Typography paragraph>
               Bild {uploadState.progress + 1} von {fileList.length} wird hochgeladen.
             </Typography>
-          </>
+          </Grid>
         )}
 
         {uploadState.type === "UploadComplete" && (
-          <>
-            <Alert severity="success" className={classes.successAlert}>
-              Vielen Dank, wir haben deine Bilder bekommen!
-            </Alert>
+          <Grid item xs={12}>
+            <Alert severity="success">Vielen Dank, wir haben deine Bilder bekommen!</Alert>
             <Button variant="contained" onClick={() => window.location.reload()} className={classes.moreImagesButton}>
               Weitere Bilder hochladen
             </Button>
-          </>
+          </Grid>
+        )}
+
+        {uploadState.type === "UploadFailed" && (
+          <Grid item xs={12}>
+            <Alert severity="error">
+              Oh nein, da ist etwas beim Hochladen schiefgelaufen! Du kannst es einfach noch einmal probieren. Wenn es
+              dann noch immer nicht klappt, kontaktiere Jakob, der kann das Problem hoffentlich beheben.
+            </Alert>
+            <Button variant="contained" onClick={() => window.location.reload()} className={classes.moreImagesButton}>
+              Nochmal Probieren
+            </Button>
+          </Grid>
         )}
       </Grid>
     </>
