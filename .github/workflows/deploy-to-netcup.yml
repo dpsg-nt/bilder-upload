@@ -28,12 +28,12 @@ jobs:
 
       - name: remove old deployment
         env: { SSH_AUTH_SOCK: /tmp/ssh_agent.sock }
-        run: ssh ${{ secrets.NETCUP_SSH_USER }}@${{ secrets.NETCUP_SSH_HOST }} "rm -rf httpdocs/dpsgnt.de/bilder-upload && mkdir httpdocs/dpsgnt.de/bilder-upload"
+        run: ssh ${{ secrets.NETCUP_SSH_USER }}@${{ secrets.NETCUP_SSH_HOST }} "cp httpdocs/dpsgnt.de/bilder-upload/config.php config.backup.php && rm -rf httpdocs/dpsgnt.de/bilder-upload/* && mkdir httpdocs/dpsgntde/bilder-upload && cp config.backup.php httpdocs/dpsgnt.de/bilder-upload/config.php"
 
       - name: upload api
         env: { SSH_AUTH_SOCK: /tmp/ssh_agent.sock }
-        run: scp -r api/ ${{ secrets.NETCUP_SSH_USER }}@${{ secrets.NETCUP_SSH_HOST }}:httpdocs/dpsgnt.de/bilder-upload
+        run: scp -r api/* ${{ secrets.NETCUP_SSH_USER }}@${{ secrets.NETCUP_SSH_HOST }}:httpdocs/dpsgnt.de/bilder-upload
 
       - name: upload frontend
         env: { SSH_AUTH_SOCK: /tmp/ssh_agent.sock }
-        run: scp -r frontend/build/ ${{ secrets.NETCUP_SSH_USER }}@${{ secrets.NETCUP_SSH_HOST }}:httpdocs/dpsgnt.de/bilder-upload
+        run: scp -r frontend/build/* ${{ secrets.NETCUP_SSH_USER }}@${{ secrets.NETCUP_SSH_HOST }}:httpdocs/dpsgnt.de/bilder-upload
