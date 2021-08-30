@@ -1,0 +1,39 @@
+name: deploy-to-netcup
+on:
+  push:
+    branches: [master]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: 14.x
+          cache: yarn
+          cache-dependency-path: |
+            frontend/yarn.lock
+      - run: yarn install
+        working-directory: frontend
+      - run: yarn build
+        working-directory: frontend
+
+      - name: setup SSH
+        env: { SSH_AUTH_SOCK: /tmp/ssh_agent.sock }
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan ${{ secrets.NETCUP_SSH_HOST }} >> ~/.ssh/known_hosts
+          ssh-agent -a $SSH_AUTH_SOCK
+          ssh-add - <<< "${{ secrets.NETCUP_SSH_KEY }}"
+
+      - name: remove old deployment
+        env: { SSH_AUTH_SOCK: /tmp/ssh_agent.sock }
+        run: ssh ${{ secrets.NETCUP_SSH_USER }}@${{ secrets.NETCUP_SSH_HOST }} "rm -rf httpdocs/dpsgnt.de/bilder-upload && mkdir httpdocs/dpsgnt.de/bilder-upload"
+
+      - name: upload api
+        env: { SSH_AUTH_SOCK: /tmp/ssh_agent.sock }
+        run: scp -r api/ ${{ secrets.NETCUP_SSH_USER }}@${{ secrets.NETCUP_SSH_HOST }}:httpdocs/dpsgnt.de/bilder-upload
+
+      - name: upload frontend
+        env: { SSH_AUTH_SOCK: /tmp/ssh_agent.sock }
+        run: scp -r frontend/build/ ${{ secrets.NETCUP_SSH_USER }}@${{ secrets.NETCUP_SSH_HOST }}:httpdocs/dpsgnt.de/bilder-upload
