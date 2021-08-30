@@ -28,7 +28,7 @@ jobs:
 
       - name: remove old deployment
         env: { SSH_AUTH_SOCK: /tmp/ssh_agent.sock }
-        run: ssh ${{ secrets.NETCUP_SSH_USER }}@${{ secrets.NETCUP_SSH_HOST }} rm -rf httpdocs/dpsgnt.de/bilder-upload/*"
+        run: ssh ${{ secrets.NETCUP_SSH_USER }}@${{ secrets.NETCUP_SSH_HOST }} "rm -rf httpdocs/dpsgnt.de/bilder-upload/*"
 
       - name: upload api
         env: { SSH_AUTH_SOCK: /tmp/ssh_agent.sock }
