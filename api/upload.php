@@ -1,6 +1,6 @@
 <?php
 
-require_once('./config.php');
+require_once('./.config.php');
 
 /*
 Some documentation how uploads work:
@@ -81,7 +81,7 @@ if($_SERVER['REQUEST_METHOD'] == 'GET') {
         die('The user is not allowed to update the credentials for uploading images.');
     }
 
-    file_put_contents('./config.microsoft-refresh-token.secret', $tokens->refresh_token);
+    file_put_contents('./.config.microsoft-refresh-token.secret', $tokens->refresh_token);
     echo "Successfully updated refresh_token.";
     exit();
 }
@@ -97,7 +97,7 @@ curl_setopt($curl, CURLOPT_POSTFIELDS, array(
     'client_id' => MICROSOFT_GRAPH_CLIENT_ID,
     'client_secret' => MICROSOFT_GRAPH_CLIENT_SECRET,
     'grant_type' => 'refresh_token',
-    'refresh_token' => file_get_contents('./config.microsoft-refresh-token.secret'),
+    'refresh_token' => file_get_contents('./.config.microsoft-refresh-token.secret'),
     'scope' => 'offline_access Files.ReadWrite.All User.Read'
 ));
 $response = curl_exec($curl);
@@ -111,7 +111,7 @@ if($status != 200) {
 
 $tokens = json_decode($response);
 // Update the refresh token, this will help that the token does not expire at some point.
-file_put_contents('./config.microsoft-refresh-token.secret', $tokens->refresh_token);
+file_put_contents('./.config.microsoft-refresh-token.secret', $tokens->refresh_token);
 
 // create an upload session
 $request_body = file_get_contents('php://input');

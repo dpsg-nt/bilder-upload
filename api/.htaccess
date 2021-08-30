@@ -1,9 +1,9 @@
-<Files "config.php">
+<Files ".config.php">
   Order Allow,Deny
   Deny from All
 </Files>
 
-<Files "config.microsoft-refresh-token.secret">
+<Files ".config.microsoft-refresh-token.secret">
   Order Allow,Deny
   Deny from All
 </Files>
