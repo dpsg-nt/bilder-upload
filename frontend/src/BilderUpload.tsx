@@ -19,6 +19,7 @@ import InputLabel from "@material-ui/core/InputLabel";
 import { apiBaseUrl } from "./config";
 import { useLocalStorage } from "./utils/useLocalStorage";
 import { generateYears } from "./utils/generateYears";
+import { retry } from "./utils/retry";
 
 const useStyles = makeStyles((theme) => ({
   circularProgress: {
@@ -33,7 +34,7 @@ const useStyles = makeStyles((theme) => ({
 
 type UploadNotStarted = { type: "UploadNotStarted" };
 type UploadComplete = { type: "UploadComplete" };
-type UploadFailed = { type: "UploadFailed" };
+type UploadFailed = { type: "UploadFailed"; failedIndex: number };
 type UploadRunning = {
   type: "UploadRunning";
   progress: number;
@@ -58,6 +59,8 @@ export const BilderUpload: React.FC = () => {
   });
 
   const [fileList, setFileList] = React.useState<File[]>([]);
+  const [currentFile, setCurrentFile] = React.useState<string>();
+  const [fileProgress, setFileProgress] = React.useState<number>(0);
   const [uploadState, setUploadState] = React.useState<
     UploadNotStarted | UploadRunning | UploadComplete | UploadFailed
   >({
@@ -75,28 +78,50 @@ export const BilderUpload: React.FC = () => {
   };
 
   const startUpload = async (state: FormState) => {
-    try {
-      setPersistentName(state.name);
-      setUploadState({ type: "UploadRunning", progress: 0 });
+    await upload(state, 0);
+  };
 
-      for (let index = 0; index < fileList.length; index++) {
-        setUploadState({ type: "UploadRunning", progress: index });
-        const file = fileList[index];
-        const uploadTicket = await axios.post(`${apiBaseUrl}/upload`, {
-          name: `${state.jahr} ${state.aktion} (${state.name})`,
-          file: file.name,
-        });
-        const uploadUrl = uploadTicket.data.uploadUrl;
+  const resumeUpload = async (startFromIndex: number) => {
+    upload(getValues(), startFromIndex);
+  };
 
-        await axios.put(uploadUrl, await file.arrayBuffer(), {
-          headers: { "Content-Range": `bytes 0-${file.size - 1}/${file.size}` },
+  const upload = async (state: FormState, startFromIndex: number) => {
+    setPersistentName(state.name);
+
+    setUploadState({ type: "UploadRunning", progress: 0 });
+
+    for (let index = startFromIndex; index < fileList.length; index++) {
+      const currentFile = URL.createObjectURL(fileList[index]);
+      setCurrentFile(currentFile);
+      setFileProgress(0);
+      setUploadState({ type: "UploadRunning", progress: index });
+
+      const file = fileList[index];
+
+      try {
+        await retry(2, 5_000, async () => {
+          const uploadTicket = await axios.post(`${apiBaseUrl}/upload`, {
+            name: `${state.jahr} ${state.aktion} (${state.name})`,
+            file: file.name,
+          });
+          const uploadUrl = uploadTicket.data.uploadUrl;
+
+          await axios.put(uploadUrl, await file.arrayBuffer(), {
+            headers: { "Content-Range": `bytes 0-${file.size - 1}/${file.size}` },
+            onUploadProgress: (e) => setFileProgress(e.loaded / e.total),
+          });
         });
+
+        URL.revokeObjectURL(currentFile);
+      } catch (e) {
+        URL.revokeObjectURL(currentFile);
+        setCurrentFile(undefined);
+        setUploadState({ type: "UploadFailed", failedIndex: index });
+        throw e;
       }
-      setUploadState({ type: "UploadComplete" });
-    } catch (e) {
-      setUploadState({ type: "UploadFailed" });
-      throw e;
     }
+    setUploadState({ type: "UploadComplete" });
+    setCurrentFile(undefined);
   };
 
   return (
@@ -160,7 +185,11 @@ export const BilderUpload: React.FC = () => {
 
             <Grid item xs={12}>
               <Typography paragraph>
-                <Button variant="contained" color="secondary" onClick={() => inputRef.current?.click()}>
+                <Button
+                  variant={fileList.length > 0 ? "outlined" : "contained"}
+                  color="secondary"
+                  onClick={() => inputRef.current?.click()}
+                >
                   {fileList.length > 0 ? `✓ ${fileList.length} Bilder ausgewählt` : "Bilder auswählen"}
                 </Button>
               </Typography>
@@ -177,35 +206,79 @@ export const BilderUpload: React.FC = () => {
         )}
 
         {uploadState.type === "UploadRunning" && (
-          <Grid item xs={12}>
-            <Typography paragraph>Deine Bilder werden jetzt hochgeladen, dies kann einige Zeit dauern.</Typography>
-            <LinearProgress variant="determinate" value={(uploadState.progress / fileList.length) * 100} />
-            <CircularProgress size="16px" className={classes.circularProgress} />
-            <Typography paragraph>
-              Bild {uploadState.progress + 1} von {fileList.length} wird hochgeladen.
-            </Typography>
-          </Grid>
+          <>
+            <Grid item xs={12}>
+              <Typography paragraph>Deine Bilder werden jetzt hochgeladen, dies kann einige Zeit dauern.</Typography>
+            </Grid>
+            <Grid item xs={12}>
+              <LinearProgress variant="determinate" value={(uploadState.progress / fileList.length) * 100} />
+              <CircularProgress size="16px" className={classes.circularProgress} />
+              <Typography paragraph>
+                Bild {uploadState.progress + 1} von {fileList.length} wird hochgeladen.
+              </Typography>
+            </Grid>
+            <Grid item xs={12}>
+              <div style={{ position: "relative" }}>
+                <img src={currentFile} alt="current upload" style={{ width: "100%" }} />
+                <div
+                  style={{
+                    position: "absolute",
+                    left: `${fileProgress * 100}%`,
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: "#fff",
+                    opacity: 0.5,
+                    transition: fileProgress < 0.01 ? "inherit" : "left 0.25s ease-in-out",
+                  }}
+                ></div>
+              </div>
+            </Grid>
+          </>
         )}
 
         {uploadState.type === "UploadComplete" && (
-          <Grid item xs={12}>
-            <Alert severity="success">Vielen Dank, wir haben deine Bilder bekommen!</Alert>
-            <Button variant="contained" onClick={() => window.location.reload()} className={classes.moreImagesButton}>
-              Weitere Bilder hochladen
-            </Button>
-          </Grid>
+          <>
+            <Grid item xs={12}>
+              <Alert severity="success">Vielen Dank, wir haben deine Bilder bekommen!</Alert>
+            </Grid>
+            <Grid item xs={12}>
+              <Button variant="contained" onClick={() => window.location.reload()} className={classes.moreImagesButton}>
+                Weitere Bilder hochladen
+              </Button>
+            </Grid>
+          </>
         )}
 
         {uploadState.type === "UploadFailed" && (
-          <Grid item xs={12}>
-            <Alert severity="error">
-              Oh nein, da ist etwas beim Hochladen schiefgelaufen! Du kannst es einfach noch einmal probieren. Wenn es
-              dann noch immer nicht klappt, kontaktiere Jakob, der kann das Problem hoffentlich beheben.
-            </Alert>
-            <Button variant="contained" onClick={() => window.location.reload()} className={classes.moreImagesButton}>
-              Nochmal Probieren
-            </Button>
-          </Grid>
+          <>
+            <Grid item xs={12}>
+              <Alert severity="error">
+                <Typography paragraph>
+                  Oh nein, da ist etwas beim Hochladen schiefgelaufen! Probiere mit "Upload Fortsetzen" das Hochladen
+                  fortzusetzen.
+                </Typography>
+                <Typography paragraph>
+                  Wenn's trotzdem nicht weitergehen will, kannst du auch "Von Vorn Starten" probieren.
+                </Typography>
+                <Typography>
+                  Wenn es dann noch immer nicht klappt, kontaktiere Jakob, der kann das Problem hoffentlich beheben.
+                </Typography>
+              </Alert>
+            </Grid>
+            <Grid item xs={12}>
+              <Button
+                variant="contained"
+                onClick={() => resumeUpload(uploadState.failedIndex)}
+                className={classes.moreImagesButton}
+              >
+                Upload Fortsetzen
+              </Button>
+              <Button variant="outlined" onClick={() => window.location.reload()} className={classes.moreImagesButton}>
+                Von Vorn Starten
+              </Button>
+            </Grid>
+          </>
         )}
       </Grid>
     </>
