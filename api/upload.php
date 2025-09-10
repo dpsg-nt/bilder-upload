@@ -49,7 +49,7 @@ if($_SERVER['REQUEST_METHOD'] == 'GET') {
     curl_setopt($curl, CURLOPT_POST, true);
     curl_setopt($curl, CURLOPT_POSTFIELDS, array(
         'client_id' => MICROSOFT_GRAPH_CLIENT_ID,
-        'client_secret' => MICROSOFT_GRAPH_APPLICATION_SECRET,
+        'client_secret' => MICROSOFT_GRAPH_CLIENT_SECRET,
         'grant_type' => 'authorization_code',
         'code' => $_GET['code'],
         'scope' => 'offline_access Files.ReadWrite.All User.Read',
