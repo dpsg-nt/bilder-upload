@@ -34,7 +34,7 @@ if($_SERVER['REQUEST_METHOD'] == 'GET') {
     $redirect_uri = explode('?', $_SERVER['REQUEST_SCHEME'].'://'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'])[0];
 
     if(count($_GET) == 0) {
-        header('Location: https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id='.MICROSOFT_GRAPH_APPLICATION_ID.'&response_type=code'.
+        header('Location: https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id='.MICROSOFT_GRAPH_CLIENT_ID.'&response_type=code'.
         '&scope=offline_access Files.ReadWrite.All User.Read&redirect_uri='.$redirect_uri);
         exit();
     }
@@ -111,7 +111,7 @@ if($status != 200) {
 
 $tokens = json_decode($response);
 // Update the refresh token, this will help that the token does not expire at some point.
-file_put_contents('./config.microsoft-refresh-token.secret', $tokens->refresh_token);
+file_put_contents('./.config.microsoft-refresh-token.secret', $tokens->refresh_token);
 
 // create an upload session
 $request_body = file_get_contents('php://input');
