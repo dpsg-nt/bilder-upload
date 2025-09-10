@@ -121,8 +121,11 @@ $data = json_decode($request_body);
 $name = preg_replace('/[^a-z0-9\.\-\ \(\)]/i', '_', $data->name);
 $file = preg_replace('/[^a-z0-9\.\-]/i', '_', $data->file);
 
-$curl = curl_init('https://graph.microsoft.com/v1.0/me/drive/root:'.MICROSOFT_ONEDRIVE_BASE_FOLDER.'/'.rawurlencode($name).'/'.$file.':/createUploadSession');
+$baseFolder = implode("/", array_map("rawurlencode", explode("/", MICROSOFT_ONEDRIVE_BASE_FOLDER)));
+
+$curl = curl_init('https://graph.microsoft.com/v1.0/me/drive/root:'.$baseFolder.'/'.rawurlencode($name).'/'.$file.':/createUploadSession');
 curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($curl, CURLINFO_HEADER_OUT, true);
 curl_setopt($curl, CURLOPT_HTTPHEADER, array(
     'Authorization: Bearer '.$tokens->access_token,
     'Content-Type: application/json'
@@ -130,14 +133,21 @@ curl_setopt($curl, CURLOPT_HTTPHEADER, array(
 curl_setopt($curl, CURLOPT_POST, true);
 curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode(array(
     'item' => array(
-        '@odata.type' => 'microsoft.graph.driveItemUploadableProperties',
         '@microsoft.graph.conflictBehavior' => 'replace',
         'name' => $file
     )
 )));
+
 $response = curl_exec($curl);
 $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+$reqInfo = curl_getinfo($curl);
 curl_close($curl);
+
+if($status != 200) {
+    echo $response;
+    var_dump($reqInfo);
+    exit();
+}
 
 echo json_encode(array(
     'uploadUrl' => json_decode($response)->uploadUrl
