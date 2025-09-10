@@ -34,7 +34,7 @@ if($_SERVER['REQUEST_METHOD'] == 'GET') {
     $redirect_uri = explode('?', $_SERVER['REQUEST_SCHEME'].'://'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'])[0];
 
     if(count($_GET) == 0) {
-        header('Location: https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id='.MICROSOFT_GRAPH_CLIENT_ID.'&response_type=code'.
+        header('Location: https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id='.MICROSOFT_GRAPH_APPLICATION_ID.'&response_type=code'.
         '&scope=offline_access Files.ReadWrite.All User.Read&redirect_uri='.$redirect_uri);
         exit();
     }
@@ -49,7 +49,7 @@ if($_SERVER['REQUEST_METHOD'] == 'GET') {
     curl_setopt($curl, CURLOPT_POST, true);
     curl_setopt($curl, CURLOPT_POSTFIELDS, array(
         'client_id' => MICROSOFT_GRAPH_CLIENT_ID,
-        'client_secret' => MICROSOFT_GRAPH_CLIENT_SECRET,
+        'client_secret' => MICROSOFT_GRAPH_APPLICATION_SECRET,
         'grant_type' => 'authorization_code',
         'code' => $_GET['code'],
         'scope' => 'offline_access Files.ReadWrite.All User.Read',
@@ -111,7 +111,7 @@ if($status != 200) {
 
 $tokens = json_decode($response);
 // Update the refresh token, this will help that the token does not expire at some point.
-file_put_contents('./.config.microsoft-refresh-token.secret', $tokens->refresh_token);
+file_put_contents('./config.microsoft-refresh-token.secret', $tokens->refresh_token);
 
 // create an upload session
 $request_body = file_get_contents('php://input');
@@ -121,8 +121,11 @@ $data = json_decode($request_body);
 $name = preg_replace('/[^a-z0-9\.\-\ \(\)]/i', '_', $data->name);
 $file = preg_replace('/[^a-z0-9\.\-]/i', '_', $data->file);
 
-$curl = curl_init('https://graph.microsoft.com/v1.0/me/drive/root:'.MICROSOFT_ONEDRIVE_BASE_FOLDER.'/'.rawurlencode($name).'/'.$file.':/createUploadSession');
+$baseFolder = implode("/", array_map("rawurlencode", explode("/", MICROSOFT_ONEDRIVE_BASE_FOLDER)));
+
+$curl = curl_init('https://graph.microsoft.com/v1.0/me/drive/root:'.$baseFolder.'/'.rawurlencode($name).'/'.$file.':/createUploadSession');
 curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($curl, CURLINFO_HEADER_OUT, true);
 curl_setopt($curl, CURLOPT_HTTPHEADER, array(
     'Authorization: Bearer '.$tokens->access_token,
     'Content-Type: application/json'
@@ -130,14 +133,21 @@ curl_setopt($curl, CURLOPT_HTTPHEADER, array(
 curl_setopt($curl, CURLOPT_POST, true);
 curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode(array(
     'item' => array(
-        '@odata.type' => 'microsoft.graph.driveItemUploadableProperties',
         '@microsoft.graph.conflictBehavior' => 'replace',
         'name' => $file
     )
 )));
+
 $response = curl_exec($curl);
 $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+$reqInfo = curl_getinfo($curl);
 curl_close($curl);
+
+if($status != 200) {
+    echo $response;
+    var_dump($reqInfo);
+    exit();
+}
 
 echo json_encode(array(
     'uploadUrl' => json_decode($response)->uploadUrl
